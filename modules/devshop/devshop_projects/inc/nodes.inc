@@ -41,29 +41,66 @@ function devshop_projects_node_load($nodes, $types) {
 
   global $user;
   $project = new stdClass();
+  $nids = array_keys($nodes);
+
+  $query = db_select('hosting_devshop_project_environment', 'environments');
+  $query->addField('environments', 'name', 'environment');
+  $query->addField('environments', 'site');
+  $query->addField('environments', 'platform');
+  $query->addField('environments', 'project_nid', 'project');
+
+  $conditions = db_or();
+  $conditions->condition('site', $nids, 'IN');
+  $conditions->condition('platform', $nids, 'IN');
+  $conditions->condition('project_nid', $nids, 'IN');
+
+  $query->condition($conditions);
+
+  $results = $query->execute();
+  foreach ($results as $record) {
+    $projects[$record->project][$record->environment] = array(
+      'site' => $record->site,
+      'platform' => $record->platform,
+    );
+
+    // BUILD PROJECT DATA
+    if (isset($nodes[$record->site])) {
+      $nodes[$record->site]->project = $record->project;
+      $nodes[$record->site]->environment = $record->environment;
+    }
+
+    if (isset($nodes[$record->platform])) {
+      $nodes[$record->platform]->project = $record->project;
+      $nodes[$record->platform]->environment = $record->environment;
+    }
+
+    if (isset($nodes[$record->project])) {
+      $nodes[$record->project]->project = $record->project;
+    }
+  }
 
   foreach ($nodes as $nid => &$node) {
 
-    // Sites & Platforms
-    if ($node->type == 'platform' || $node->type == 'site') {
-
-      // Load project and environment
-      $result = (object) db_query("SELECT project_nid, name FROM {hosting_devshop_project_environment} e WHERE :type  = :nid", array(
-          ':type' => $node->type,
-          ':nid' => $node->nid,
-      ))->fetchAssoc();
-
-      $project_node = node_load($result->project_nid);
-
-      if (!empty($project_node->project)) {
-        $node->project = $project_node->project;
-        $node->environment = $project_node->project->environments[$result->name];
-      }
-      return;
-    }
+//    // Sites & Platforms
+//    if ($node->type == 'platform' || $node->type == 'site') {
+//
+//      // Load project and environment
+//      $result = (object) db_query("SELECT project_nid, name FROM {hosting_devshop_project_environment} e WHERE :type  = :nid", array(
+//          ':type' => $node->type,
+//          ':nid' => $node->nid,
+//      ))->fetchAssoc();
+//
+//      $project_node = node_load($result->project_nid);
+//
+//      if (!empty($project_node->project)) {
+//        $node->project = $project_node->project;
+//        $node->environment = $project_node->project->environments[$result->name];
+//      }
+//      return;
+//    }
 
     // Tasks
-    elseif ($node->type == 'task') {
+   if ($node->type == 'task') {
 
       // Prepare bootstrap-compatible things.
       // Load up task types to get our language.
@@ -108,23 +145,7 @@ function devshop_projects_node_load($nodes, $types) {
       $node->icon = devshop_task_status_icon($node->task_status);
 
       // Get desired URL
-      $node->url = url("node/{$node->nid}");
-
-      // @TODO: Doesn't quite work. we need a different VID for each clone link.
-      //  if ($node->task_type == 'clone') {
-      //    $additions['url'] = url("node/{$node->nid}/revisions/{$node->vid}/view");
-      //  }
-
-      // @TODO: This is causing a major SEGFAULT. It destroys apache! unable to restart the service, even!
-//      $result = (object) db_query("SELECT nid, name FROM {hosting_devshop_project_environment} e LEFT JOIN node ON e.project_nid = node.nid WHERE site = :site OR platform = :platform", array(
-//          ':site' => $node->rid,
-//          ':platform' => $node->rid
-//      ))->fetchAssoc();
-//
-//      // Load project and environment
-//      $project_node = node_load($result->nid);
-//      $node->project = $project_node->project;
-//      $node->environment = $project_node->project->environments[$result->name];
+      $nosnt = $project_node->project->environments[$result->name];
     }
     // Projects
     elseif ($node->type == 'project') {
